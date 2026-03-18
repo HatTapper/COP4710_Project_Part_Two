@@ -1,6 +1,7 @@
 import flet as ft
-from database_init import *
+from database_init import connectToDatabase
 from definitions import VehicleInputField, VehicleType
+from typing import cast
 
 # note, this assumes the database is already constructed
 # at some point, we could write init code to prepare the tables
@@ -12,19 +13,21 @@ DB_USER_NAME = "root"
 DB_USER_PASS = "6432"
 DB_DATABASE_NAME = "vrms"
 
-cursor = connectToDatabase(
+database, cursor = connectToDatabase(
     hostName=DB_HOST_NAME,
     userName=DB_USER_NAME,
     userPass=DB_USER_PASS,
     dbName=DB_DATABASE_NAME,
 )
 
+cachedVehicleTypeIds: dict[str, int] = {}
+
 # this is run by flet at startup, treat as a standard main function
 def main(page: ft.Page):
     SCREEN_WIDTH = page.window.width
     SCREEN_HEIGHT = page.window.height
 
-    if SCREEN_WIDTH == None or SCREEN_HEIGHT == None:
+    if SCREEN_WIDTH is None or SCREEN_HEIGHT is None:
         return
     
     HALF_SCREEN_WIDTH = SCREEN_WIDTH / 2
@@ -70,6 +73,21 @@ def main(page: ft.Page):
     )
 
     page.add(layout)
+
+def getVehicleTypeId(vehicleType: str):
+    if cachedVehicleTypeIds.get(vehicleType):
+        return cachedVehicleTypeIds[vehicleType]
+
+    cursor.execute("SELECT VehicleTypeID FROM VehicleType WHERE TypeName = %s", (vehicleType,))
+    # we know from the table structure that the ID will either be an int or
+    # return None if it does not exist
+    result = cast(tuple[int] | None, cursor.fetchone())
+
+    if result is not None:
+        cachedVehicleTypeIds[vehicleType] = result[0]
+        return result[0]
+    
+    return -1
 
 # called when the button to submit Vehicle table data is pressed, requires the dict of input fields that
 # fulfill the table data and the dropdown
@@ -129,11 +147,37 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
     else:
         vehicleTypeDropdown.error_text = None
 
-    # TODO: update query so it inserts into Vehicle table once data has been verified
     if shouldRunInsert:
-        cursor.execute("SELECT * FROM customer")
-        print(cursor.fetchall())
-    
+        licensePlate = inputFields[VehicleInputField.LICENSE_PLATE].value
+        name = inputFields[VehicleInputField.NAME].value
+        make = inputFields[VehicleInputField.MAKE].value
+        model = inputFields[VehicleInputField.MODEL].value
+        color = inputFields[VehicleInputField.COLOR].value
+        dailyRate = float(inputFields[VehicleInputField.DAILY_RATE].value)
+        year = int(inputFields[VehicleInputField.YEAR].value)
+        mileage = int(inputFields[VehicleInputField.MILEAGE].value)
+        branchId = int(inputFields[VehicleInputField.BRANCH_ID].value)
+        # python typechecker insists value is nullable when
+        # its null-checked earlier on, so im casting this
+        vehicleType = cast(str, vehicleTypeDropdown.value)
+
+        vehicleTypeId = getVehicleTypeId(vehicleType)
+        if vehicleTypeId < 0:
+            print("VehicleType input was a value that does not exist in the database! Query failed.")
+            return
+
+        # the super query
+        try:
+            cursor.execute("""
+                INSERT INTO Vehicle (LicensePlate, Name, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (licensePlate, name, make, model, color, dailyRate, year, mileage, branchId, vehicleTypeId))
+
+            database.commit()
+        except:
+            # TODO: consider adding an output field that displays on the active window UI
+            print("An error occurred completing the query.")
+
 
 # helper function to build all of the UI for the vehicle input section
 def prepareVehicleInputFields(screenWidth):
@@ -144,7 +188,7 @@ def prepareVehicleInputFields(screenWidth):
     # be deprecated
     YearInputFilter = ft.InputFilter(regex_string=r"^[0-9]{0,4}$")
     # accepts digits of any length
-    MileageInputFilter = ft.NumbersOnlyInputFilter()
+    NumbersInputFilter = ft.NumbersOnlyInputFilter()
     # accepts any characters, up to 20 characters
     LicensePlateInputFilter = ft.InputFilter(regex_string=r"^.{0,20}$")
     # accepts any characters, up to 50 characters
@@ -212,7 +256,14 @@ def prepareVehicleInputFields(screenWidth):
     currentMileageInput = ft.TextField(
         label="Mileage",
         color="#000000",
-        input_filter=MileageInputFilter,
+        input_filter=NumbersInputFilter,
+        width=FIFTH_SCREEN_WIDTH,
+        helper=" ",
+    )
+    branchIdInput = ft.TextField(
+        label="Branch ID",
+        color="#000000",
+        input_filter=NumbersInputFilter,
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
     )
@@ -240,6 +291,7 @@ def prepareVehicleInputFields(screenWidth):
         VehicleInputField.COLOR: carColorInput, 
         VehicleInputField.DAILY_RATE: dailyRateInput, 
         VehicleInputField.MILEAGE: currentMileageInput, 
+        VehicleInputField.BRANCH_ID: branchIdInput,
     }
 
     submitCarButton = ft.Button(
@@ -255,7 +307,7 @@ def prepareVehicleInputFields(screenWidth):
             ft.Row([carMakeInput, carModelInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([carYearInput, carColorInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([dailyRateInput, currentMileageInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([carTypeInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([branchIdInput, carTypeInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
         ],
         spacing=10,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
