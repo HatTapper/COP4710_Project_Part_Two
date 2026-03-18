@@ -12,6 +12,7 @@ class VehicleInputField(Enum):
     COLOR = "Color"
     DAILY_RATE = "DailyRate"
     MILEAGE = "CurrentMileage"
+    BRANCH_ID = "BranchId"
 
 # enum for storing all valid VehicleTypes
 class VehicleType(Enum):
