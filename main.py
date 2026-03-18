@@ -2,6 +2,7 @@ import flet as ft
 from database_init import connectToDatabase
 from definitions import VehicleInputField, VehicleType
 from typing import cast
+from datetime import datetime
 
 # note, this assumes the database is already constructed
 # at some point, we could write init code to prepare the tables
@@ -88,6 +89,12 @@ def getVehicleTypeId(vehicleType: str):
         return result[0]
     
     return -1
+
+def getEstimatedCost(startTime: datetime, endTime: datetime, dailyRate: float):
+    timeDelta = endTime - startTime
+    secondsToDays = timeDelta.total_seconds() / 86400
+
+    return secondsToDays * dailyRate
 
 # called when the button to submit Vehicle table data is pressed, requires the dict of input fields that
 # fulfill the table data and the dropdown
@@ -332,7 +339,9 @@ def prepareVehicleInputFields(screenWidth):
 
 # called when the user presses the button to query the database and return
 # agreements that are all connected to the customer's ID
-def onCustomerAgreementSearch(e: ft.Event, customerInput: ft.TextField, output: ft.ListView):
+def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
+    output.controls.clear()
+
     if customerInput.value.strip() == "":
         customerInput.error = "Please enter a customer ID"
         return
@@ -347,9 +356,53 @@ def onCustomerAgreementSearch(e: ft.Event, customerInput: ft.TextField, output: 
     except ValueError:
         return
     
-    # TODO: update query so it pulls from RentalAgreements table
-    cursor.execute("SELECT * FROM customer")
-    print(cursor.fetchall())
+    agreementElements = []
+
+    
+    
+    cursor.execute("SELECT * FROM RentalAgreements WHERE CustomerID = %s", (customerId,))
+    results = cursor.fetchall()
+    for result in results:
+        cursor.execute("""
+            SELECT Vehicle.DailyRate
+            FROM RentalAgreement
+            JOIN Vehicle ON RentalAgreement.VehicleID = Vehicle.VehicleID
+            WHERE RentalAgreement.AgreementID = %s
+        """, cast(str, result[0]))
+
+        dailyRate = cast(float, cursor.fetchone())
+        estimatedCost = None
+        actualCost = None
+        if dailyRate is not None:
+            estimatedCost = getEstimatedCost(cast(datetime, result[5]), cast(datetime, result[6]), dailyRate)
+            if result[7] and result[8]:
+                actualCost = getEstimatedCost(cast(datetime, result[7]), cast(datetime, result[8]), dailyRate)
+
+        textContent = f"""
+            Agreement ID: {result[0]}
+            Vehicle ID: {result[2]}
+            Pickup Branch ID: {result[3]}
+            Return Branch ID: {result[4]}
+            Scheduled Pickup: {result[5]}
+            Scheduled Return: {result[6]}
+            Actual Pickup: {result[7] or "Not picked up"}
+            Actual Return: {result[8] or "Not returned"}
+            Estimated Cost: {result[9] or estimatedCost}
+            Actual Cost: {result[10] or actualCost or "Not calculated"}
+            Status: {result[11]}
+        """
+        resultText = ft.Text(
+            value=textContent, 
+            text_align=ft.TextAlign.CENTER,
+            align=ft.Alignment.CENTER,
+            color=ft.Colors.BLACK,
+            height=150,
+        ),
+
+        agreementElements.append(resultText)
+
+    output.controls = agreementElements
+    output.update()
 
 # helper function to build all of the UI for the customer agreement viewer section
 def prepareCustomerAgreementViewer(screenWidth):
@@ -380,10 +433,10 @@ def prepareCustomerAgreementViewer(screenWidth):
                 text_align=ft.TextAlign.CENTER,
                 align=ft.Alignment.CENTER,
                 color=ft.Colors.BLACK,
-                height=50,
+                height=150,
             ),
         ],
-        height = 6 * 50,
+        height = 2 * 150,
         spacing=0,
         width=THIRD_SCREEN_WIDTH,
         scroll=ft.ScrollMode.ALWAYS,
@@ -396,7 +449,7 @@ def prepareCustomerAgreementViewer(screenWidth):
 
     getAgreementsButton = ft.Button(
         content="Search", 
-        on_click=lambda e: onCustomerAgreementSearch(e, customerIdInput, agreementsListView), 
+        on_click=lambda e: onCustomerAgreementSearch(customerIdInput, agreementsListView), 
         width=FIFTH_SCREEN_WIDTH
     )
 
