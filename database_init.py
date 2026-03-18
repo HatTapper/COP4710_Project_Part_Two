@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector.cursor import MySQLCursor
 from typing import cast
+from definitions import VehicleType
 
 # iterates through the database and verifies that every
 # necessary table and column exists
@@ -101,6 +102,21 @@ def verifyDatabaseIntegrity(cursor: MySQLCursor):
     
     return isValid, reason
 
+def sanitizeVehicleTypeTable(cursor: MySQLCursor):
+    missing = []
+
+    for vehicle in VehicleType:
+        cursor.execute("SELECT * FROM VehicleType WHERE TypeName = %s", (vehicle.value,))
+        if cursor.fetchone() is None:
+            missing.append((vehicle.value,))
+
+    if len(missing) > 0:
+        print(f"Appended missing VehicleType items: {missing}")
+        cursor.executemany("INSERT INTO VehicleType (TypeName) VALUES (%s)", missing)
+
+    return len(missing) > 0
+
+
 # helper function to connect to the provided database, ensuring its integrity
 # before returning the cursor to the caller
 def connectToDatabase(hostName: str, userName: str, userPass: str, dbName: str):
@@ -118,5 +134,9 @@ def connectToDatabase(hostName: str, userName: str, userPass: str, dbName: str):
     if not isValid:
         raise RuntimeError(f"Database under name {dbName} did not pass integrity check. Reason supplied: {reason}")
     
-    return cursor
+    dbChanged = sanitizeVehicleTypeTable(cursor)
+    if dbChanged:
+        db.commit()
+    
+    return db, cursor
 
