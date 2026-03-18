@@ -1,5 +1,5 @@
 import flet as ft
-import mysql.connector
+from database_init import *
 from definitions import VehicleInputField, VehicleType
 
 # note, this assumes the database is already constructed
@@ -12,15 +12,12 @@ DB_USER_NAME = "root"
 DB_USER_PASS = "6432"
 DB_DATABASE_NAME = "vrms"
 
-mydb = mysql.connector.connect(
-    host=DB_HOST_NAME,
-    user=DB_USER_NAME,
-    password=DB_USER_PASS,
-    database=DB_DATABASE_NAME,
+cursor = connectToDatabase(
+    hostName=DB_HOST_NAME,
+    userName=DB_USER_NAME,
+    userPass=DB_USER_PASS,
+    dbName=DB_DATABASE_NAME,
 )
-
-# cursor handles all queries and received data from the database
-mycursor = mydb.cursor()
 
 # this is run by flet at startup, treat as a standard main function
 def main(page: ft.Page):
@@ -134,8 +131,8 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
 
     # TODO: update query so it inserts into Vehicle table once data has been verified
     if shouldRunInsert:
-        mycursor.execute("SELECT * FROM customer")
-        print(mycursor.fetchall())
+        cursor.execute("SELECT * FROM customer")
+        print(cursor.fetchall())
     
 
 # helper function to build all of the UI for the vehicle input section
@@ -299,8 +296,8 @@ def onCustomerAgreementSearch(e: ft.Event, customerInput: ft.TextField, output: 
         return
     
     # TODO: update query so it pulls from RentalAgreements table
-    mycursor.execute("SELECT * FROM customer")
-    print(mycursor.fetchall())
+    cursor.execute("SELECT * FROM customer")
+    print(cursor.fetchall())
 
 # helper function to build all of the UI for the customer agreement viewer section
 def prepareCustomerAgreementViewer(screenWidth):
