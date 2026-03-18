@@ -77,21 +77,66 @@ def main(page: ft.Page):
 # called when the button to submit Vehicle table data is pressed, requires the dict of input fields that
 # fulfill the table data and the dropdown
 def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], vehicleTypeDropdown: ft.Dropdown):
+    def isValidInput(inputName: VehicleInputField, inputValue: str):
+        if inputValue.strip() == "":
+            field = inputFields.get(inputName)
+            if field:
+                field.error = "This field is required"
+                
+            return False
+        
+        if inputName == VehicleInputField.YEAR:
+            inputtedYear = None
+            try:
+                inputtedYear = int(inputValue)
+            except ValueError:
+                return False
+            
+            if inputtedYear < 1900:
+                field = inputFields.get(inputName)
+                if field:
+                    field.error = "Year is too low"
+
+                return False
+        elif inputName == VehicleInputField.DAILY_RATE:
+            inputtedRate = None
+            try:
+                inputtedRate = float(inputValue)
+            except ValueError:
+                return False
+            
+            # checks if the user put in a leading decimal point
+            if inputtedRate < 1:
+                field = inputFields.get(inputName)
+                if field:
+                    field.error = "Daily rate cannot be less than $1"
+
+                return False
+
+        
+        return True
+    
+    shouldRunInsert = True
+
     # TODO: needs to check each field for if the data is valid before running the SQL query
     for fieldName, inputField in inputFields.items():
-        if inputField.value.strip() == "":
-            inputField.error = "This field is required"
-        else:
+        if isValidInput(fieldName, inputField.value):
             inputField.error = None
+        else:
+            shouldRunInsert = False
+            
 
     if not vehicleTypeDropdown.value:
         vehicleTypeDropdown.error_text = "Please select a vehicle type"
+        shouldRunInsert = False
     else:
         vehicleTypeDropdown.error_text = None
 
     # TODO: update query so it inserts into Vehicle table once data has been verified
-    mycursor.execute("SELECT * FROM customer")
-    print(mycursor.fetchall())
+    if shouldRunInsert:
+        mycursor.execute("SELECT * FROM customer")
+        print(mycursor.fetchall())
+    
 
 # helper function to build all of the UI for the vehicle input section
 def prepareVehicleInputFields(screenWidth):
@@ -103,6 +148,14 @@ def prepareVehicleInputFields(screenWidth):
     YearInputFilter = ft.InputFilter(regex_string=r"^[0-9]{0,4}$")
     # accepts digits of any length
     MileageInputFilter = ft.NumbersOnlyInputFilter()
+    # accepts any characters, up to 20 characters
+    LicensePlateInputFilter = ft.InputFilter(regex_string=r"^.{0,20}$")
+    # accepts any characters, up to 50 characters
+    FiftyCharLimitInputFilter = ft.InputFilter(regex_string=r"^.{0,50}$")
+    # accepts any characters, up to 30 characters
+    ThirtyCharLimitInputFilter = ft.InputFilter(regex_string=r"^.{0,30}$")
+    # accepts up to 6 preceding numbers, an optional decimal point, and two optional numbers after the decimal
+    DailyRateInputFilter = ft.InputFilter(regex_string=r"^\d{0,6}(\.\d{0,2})?$")
 
     vehicleInputHeader = ft.Text(
         "Fill in all of the fields and hit the submit button below to add a new vehicle to the database.", 
@@ -115,24 +168,28 @@ def prepareVehicleInputFields(screenWidth):
         color="#000000",
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
+        input_filter=LicensePlateInputFilter,
     )
     carNameInput = ft.TextField(
         label="Car Name",
         color="#000000",
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
+        input_filter=FiftyCharLimitInputFilter,
     )
     carMakeInput = ft.TextField(
         label="Car Make",
         color="#000000",
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
+        input_filter=FiftyCharLimitInputFilter,
     )
     carModelInput = ft.TextField(
         label="Car Model",
         color="#000000",
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
+        input_filter=FiftyCharLimitInputFilter,
     )
     carYearInput = ft.TextField(
         label="Car Year",
@@ -146,12 +203,14 @@ def prepareVehicleInputFields(screenWidth):
         color="#000000",
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
+        input_filter=ThirtyCharLimitInputFilter,
     )
     dailyRateInput = ft.TextField(
         label="Daily Rate",
         color="#000000",
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
+        input_filter=DailyRateInputFilter,
     )
     currentMileageInput = ft.TextField(
         label="Mileage",
