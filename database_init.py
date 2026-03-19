@@ -3,6 +3,15 @@ from mysql.connector.cursor import MySQLCursor
 from typing import cast
 from definitions import VehicleType
 
+# performs a MySQL query given the cursor and query details without risk of unhandled exception
+# will return the error thrown by the cursor if an issue with the query occurs
+def performSafeQuery(cursor: MySQLCursor, query: str, params=None):
+    try:
+        cursor.execute(query, params)
+        return None
+    except Exception as e:
+        return e
+
 # iterates through the database and verifies that every
 # necessary table and column exists
 # note that this does not verify the types of the columns and their constraints,
