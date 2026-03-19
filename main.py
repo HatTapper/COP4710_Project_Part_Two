@@ -1,8 +1,6 @@
 import flet as ft
-from database_init import connectToDatabase, performSafeQuery
-from definitions import VehicleInputField, VehicleType
-from typing import cast
-from datetime import datetime
+from database_init import connectToDatabase, performSafeQuery, initializeTestingData, getVehicleTypeId
+from definitions import *
 
 # note, this assumes the database is already constructed
 # at some point, we could write init code to prepare the tables
@@ -14,6 +12,11 @@ DB_USER_NAME = "root"
 DB_USER_PASS = "6432"
 DB_DATABASE_NAME = "vrms"
 
+# if the database should be initialized with testing data
+# to assist in program functionality
+# this inserts customers, vehicles, branches, and rental agreements
+INITIALIZE_TESTING_DATA = True
+
 database, cursor = connectToDatabase(
     hostName=DB_HOST_NAME,
     userName=DB_USER_NAME,
@@ -21,7 +24,8 @@ database, cursor = connectToDatabase(
     dbName=DB_DATABASE_NAME,
 )
 
-cachedVehicleTypeIds: dict[str, int] = {}
+if INITIALIZE_TESTING_DATA:
+    initializeTestingData(cast(MySQLConnection, database), cursor)
 
 # this is run by flet at startup, treat as a standard main function
 def main(page: ft.Page):
@@ -75,28 +79,7 @@ def main(page: ft.Page):
 
     page.add(layout)
 
-def getVehicleTypeId(vehicleType: str):
-    if cachedVehicleTypeIds.get(vehicleType):
-        return cachedVehicleTypeIds[vehicleType]
-    
-    query = "SELECT VehicleTypeID FROM VehicleType WHERE TypeName = %s"
-    params = (vehicleType,)
-    error = performSafeQuery(cursor, query, params)
-    
-    if error:
-        print(error)
-        return -1
-    
-    result = cursor.fetchone()
-    # we know from the table structure that the ID will either be an int or
-    # return None if it does not exist
-    result = cast(tuple[int] | None, result)
 
-    if result is not None:
-        cachedVehicleTypeIds[vehicleType] = result[0]
-        return result[0]
-    
-    return -1
 
 def getEstimatedCost(startTime: datetime, endTime: datetime, dailyRate: float):
     timeDelta = endTime - startTime
@@ -176,7 +159,7 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
         # its null-checked earlier on, so im casting this
         vehicleType = cast(str, vehicleTypeDropdown.value)
 
-        vehicleTypeId = getVehicleTypeId(vehicleType)
+        vehicleTypeId = getVehicleTypeId(cursor, vehicleType)
         if vehicleTypeId < 0:
             print("VehicleType input was a value that does not exist in the database! Query failed.")
             return
@@ -381,7 +364,7 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
 
     
     columnsToGet = "AgreementID, VehicleID, PickupBranchID, ReturnBranchID, ScheduledPickup, ScheduledReturn, ActualPickup, ActualReturn, EstimatedCost, ActualCost, Status"
-    query = f"SELECT {columnsToGet} FROM RentalAgreements WHERE CustomerID = %s"
+    query = f"SELECT {columnsToGet} FROM RentalAgreement WHERE CustomerID = %s"
     params = (customerId,)
     error = performSafeQuery(cursor, query, params)
 
@@ -414,39 +397,52 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
             params = (result[0],)
             error = performSafeQuery(cursor, query, params)
 
-            if error is not None:
-                dailyRate = cast(float, cursor.fetchone())
+            if error is None:
+                result = cursor.fetchone()
+                dailyRate = None
+                if result is not None:
+                    dailyRate = cast(float, result[0])
+                
                 estimatedCost = None
                 actualCost = None
                 if dailyRate is not None:
-                    estimatedCost = getEstimatedCost(cast(datetime, result[5]), cast(datetime, result[6]), dailyRate)
+                    dailyRate = float(dailyRate)
+                    estimatedCost = getEstimatedCost(cast(datetime, scheduledPickup), cast(datetime, scheduledReturn), dailyRate)
                     if actualPickup and actualReturn:
-                        actualCost = getEstimatedCost(cast(datetime, result[7]), cast(datetime, result[8]), dailyRate)
+                        actualCost = getEstimatedCost(cast(datetime, actualPickup), cast(datetime, actualReturn), dailyRate)
             else:
                 print(error)
 
-        textContent = f"""
-            Agreement ID: {agreementId}
-            Vehicle ID: {vehicleId}
-            Pickup Branch ID: {pickupBranchId}
-            Return Branch ID: {returnBranchId}
-            Scheduled Pickup: {scheduledPickup}
-            Scheduled Return: {scheduledReturn}
-            Actual Pickup: {actualPickup or "Not picked up"}
-            Actual Return: {actualReturn or "Not returned"}
-            Estimated Cost: {estimatedCost}
-            Actual Cost: {actualCost or "Not calculated"}
-            Status: {status}
-        """
+        if actualCost:
+            actualCost = f"${actualCost:.2f}"
+        else:
+            actualCost = "Not calculated"
+
+        textContent = (
+            f"Agreement ID: {agreementId} | "
+            f"Vehicle ID: {vehicleId}\n"
+            f"Pickup Branch ID: {pickupBranchId} | "
+            f"Return Branch ID: {returnBranchId}\n"
+            f"Scheduled Pickup: {scheduledPickup}\n"
+            f"Scheduled Return: {scheduledReturn}\n"
+            f"Actual Pickup: {actualPickup or 'Not picked up'}\n"
+            f"Actual Return: {actualReturn or 'Not returned'}\n"
+            f"Estimated Cost: ${estimatedCost:.2f}\n"
+            f"Actual Cost: {actualCost}\n"
+            f"Status: {status}"
+        )
         resultText = ft.Text(
             value=textContent, 
             text_align=ft.TextAlign.CENTER,
             align=ft.Alignment.CENTER,
             color=ft.Colors.BLACK,
             height=150,
-        ),
+            size=10,
+            expand=True,
+        )
 
         agreementElements.append(resultText)
+
 
     output.controls = agreementElements
     output.update()
