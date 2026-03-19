@@ -1,7 +1,5 @@
 import mysql.connector
-from mysql.connector.cursor import MySQLCursor
-from typing import cast
-from definitions import VehicleType
+from definitions import *
 
 # performs a MySQL query given the cursor and query details without risk of unhandled exception
 # will return the error thrown by the cursor if an issue with the query occurs
@@ -11,6 +9,197 @@ def performSafeQuery(cursor: MySQLCursor, query: str, params=None):
         return None
     except Exception as e:
         return e
+    
+cachedVehicleTypeIds: dict[str, int] = {}
+    
+def getVehicleTypeId(cursor: MySQLCursor, vehicleType: str):
+    if cachedVehicleTypeIds.get(vehicleType):
+        return cachedVehicleTypeIds[vehicleType]
+    
+    query = "SELECT VehicleTypeID FROM VehicleType WHERE TypeName = %s"
+    params = (vehicleType,)
+    error = performSafeQuery(cursor, query, params)
+    
+    if error:
+        print(error)
+        return -1
+    
+    result = cursor.fetchone()
+    # we know from the table structure that the ID will either be an int or
+    # return None if it does not exist
+    result = cast(tuple[int] | None, result)
+
+    if result is not None:
+        cachedVehicleTypeIds[vehicleType] = result[0]
+        return result[0]
+    
+    return -1
+    
+def initializeTestingData(database: MySQLConnection, cursor: MySQLCursor):
+    def customerExists(licenseNumber: str):
+        query = "SELECT * FROM Customer WHERE DriverLicenseNumber = %s"
+        params = (licenseNumber,)
+        error = performSafeQuery(cursor, query, params)
+        return (error is not None) or (cursor.fetchone() is not None)
+    
+    def getCustomerId(licenseNumber: str):
+        query = "SELECT CustomerID FROM Customer WHERE DriverLicenseNumber = %s"
+        params = (licenseNumber,)
+        error = performSafeQuery(cursor, query, params)
+        if error is None:
+            result = cursor.fetchone()
+            if result is not None:
+                return result[0]
+            return -1
+        return -1
+    
+    def vehicleExists(licensePlate: str):
+        query = "SELECT * FROM Vehicle WHERE LicensePlate = %s"
+        params = (licensePlate,)
+        error = performSafeQuery(cursor, query, params)
+        return (error is not None) or (cursor.fetchone() is not None)
+    
+    def getVehicleId(licensePlate: str):
+        query = "SELECT VehicleID FROM Vehicle WHERE LicensePlate = %s"
+        params = (licensePlate,)
+        error = performSafeQuery(cursor, query, params)
+        if error is None:
+            result = cursor.fetchone()
+            if result is not None:
+                return result[0]
+            return -1
+        return -1
+    
+    def branchExists(branchName: str):
+        query = "SELECT * FROM RentalBranch WHERE BranchName = %s"
+        params = (branchName,)
+        error = performSafeQuery(cursor, query, params)
+        return (error is not None) or (cursor.fetchone() is not None)
+    
+    def agreementExists(pickupTime: datetime):
+        query = "SELECT * FROM RentalAgreement WHERE ScheduledPickup = %s"
+        params = (pickupTime,)
+        error = performSafeQuery(cursor, query, params)
+        return (error is not None) or (cursor.fetchone() is not None)
+    
+    JOHN_DOE_LICENSE_NUM = "123456789"
+    JANE_DOE_LICENSE_NUM = "987654321"
+    HONDA_CIVIC_PLATE = "901243"
+
+    if not customerExists(JOHN_DOE_LICENSE_NUM):
+        query = """
+                INSERT INTO Customer (FirstName, LastName, Address, Phone, Email, DriverLicenseNumber, LicenseExpiryDate)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+        params = ("John", "Doe", "65th St.", "252-124-3532", "john.doe@gmail.com", JOHN_DOE_LICENSE_NUM, date(2027, 12, 25),)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+        
+    if not customerExists(JANE_DOE_LICENSE_NUM):
+        query = """
+                INSERT INTO Customer (FirstName, LastName, Address, Phone, Email, DriverLicenseNumber, LicenseExpiryDate)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+        params = ("Jane", "Doe", "65th St.", "252-565-3342", "jane.doe@gmail.com", JANE_DOE_LICENSE_NUM, date(2027, 12, 25),)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+    
+    if not branchExists("Central VRMS Branch"):
+        query = """
+            INSERT INTO RentalBranch (BranchName, Address, Phone)
+            VALUES (%s, %s, %s)
+        """
+        params = ("Central VRMS Branch", "128th Ave.", "732-242-2545",)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+    
+    query = """
+        SELECT BranchID FROM RentalBranch WHERE BranchName = %s
+    """
+    params = ("Central VRMS Branch",)
+    error = performSafeQuery(cursor, query, params)
+    
+    if error:
+        print(f"Initialization with test values failed. Last recorded error: {error}")
+        return
+    
+    firstBranchId = cursor.fetchone()
+    if firstBranchId is None:
+        print("For some reason, the branch did not load with a branch ID, maybe database error?")
+        return
+    firstBranchId = cast(int, firstBranchId[0])
+
+    if not branchExists("Sub VRMS Branch"):
+        query = """
+            INSERT INTO RentalBranch (BranchName, Address, Phone)
+            VALUES (%s, %s, %s)
+        """
+        params = ("Sub VRMS Branch", "128th Ave.", "732-242-2545",)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+    
+    query = """
+        SELECT BranchID FROM RentalBranch WHERE BranchName = %s
+    """
+    params = ("Sub VRMS Branch",)
+    error = performSafeQuery(cursor, query, params)
+    
+    if error:
+        print(f"Initialization with test values failed. Last recorded error: {error}")
+        return
+    
+    secondBranchId = cursor.fetchone()
+    if secondBranchId is None:
+        print("For some reason, the branch did not load with a branch ID, maybe database error?")
+        return
+    secondBranchId = cast(int, secondBranchId[0])
+
+        
+    if not vehicleExists(HONDA_CIVIC_PLATE):
+        query = """
+            INSERT INTO Vehicle (LicensePlate, Name, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (HONDA_CIVIC_PLATE, "2026 Civic Sedan", "Honda", "Civic", "Red", "32.95", "2026", "40000", firstBranchId, getVehicleTypeId(cursor, VehicleType.SEDAN.value),)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+    
+    if not agreementExists(datetime(2026, 4, 16)):
+        query = """
+            INSERT INTO RentalAgreement (CustomerID, VehicleID, PickupBranchID, ReturnBranchID, ScheduledPickup, ScheduledReturn, Status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (getCustomerId(JOHN_DOE_LICENSE_NUM), getVehicleId(HONDA_CIVIC_PLATE), firstBranchId, secondBranchId, datetime(2026, 4, 16), datetime(2026, 4, 20), RentalAgreementStatus.BOOKED.value,)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+
+    print("Initialization with test values succeeded")
+    database.commit()
+
 
 # iterates through the database and verifies that every
 # necessary table and column exists
