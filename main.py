@@ -147,7 +147,6 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
 
     if shouldRunInsert:
         licensePlate = inputFields[VehicleInputField.LICENSE_PLATE].value
-        name = inputFields[VehicleInputField.NAME].value
         make = inputFields[VehicleInputField.MAKE].value
         model = inputFields[VehicleInputField.MODEL].value
         color = inputFields[VehicleInputField.COLOR].value
@@ -166,10 +165,10 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
 
         # the super query
         query = """
-            INSERT INTO Vehicle (LicensePlate, Name, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO Vehicle (LicensePlate, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        params = (licensePlate, name, make, model, color, dailyRate, year, mileage, branchId, vehicleTypeId,)
+        params = (licensePlate, make, model, color, dailyRate, year, mileage, branchId, vehicleTypeId,)
         error = performSafeQuery(cursor, query, params)
             
         if error:
@@ -213,13 +212,6 @@ def prepareVehicleInputFields(screenWidth):
         width=FIFTH_SCREEN_WIDTH,
         helper=" ",
         input_filter=LicensePlateInputFilter,
-    )
-    carNameInput = ft.TextField(
-        label="Car Name",
-        color="#000000",
-        width=FIFTH_SCREEN_WIDTH,
-        helper=" ",
-        input_filter=FiftyCharLimitInputFilter,
     )
     carMakeInput = ft.TextField(
         label="Car Make",
@@ -286,8 +278,7 @@ def prepareVehicleInputFields(screenWidth):
     )
 
     inputFields = {
-        VehicleInputField.LICENSE_PLATE: plateInput, 
-        VehicleInputField.NAME: carNameInput, 
+        VehicleInputField.LICENSE_PLATE: plateInput,  
         VehicleInputField.MAKE: carMakeInput, 
         VehicleInputField.MODEL: carModelInput, 
         VehicleInputField.YEAR: carYearInput, 
@@ -313,11 +304,11 @@ def prepareVehicleInputFields(screenWidth):
     # formatting is a pain
     vehicleInputFieldGrid = ft.Column(
         controls=[
-            ft.Row([carNameInput, plateInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([branchIdInput, plateInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([carMakeInput, carModelInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([carYearInput, carColorInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([dailyRateInput, currentMileageInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([branchIdInput, carTypeInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([carTypeInput], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
         ],
         spacing=10,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,

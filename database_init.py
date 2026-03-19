@@ -173,10 +173,10 @@ def initializeTestingData(database: MySQLConnection, cursor: MySQLCursor):
         
     if not vehicleExists(HONDA_CIVIC_PLATE):
         query = """
-            INSERT INTO Vehicle (LicensePlate, Name, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO Vehicle (LicensePlate, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        params = (HONDA_CIVIC_PLATE, "2026 Civic Sedan", "Honda", "Civic", "Red", "32.95", "2026", "40000", firstBranchId, getVehicleTypeId(cursor, VehicleType.SEDAN.value),)
+        params = (HONDA_CIVIC_PLATE, "Honda", "Civic", "Red", "32.95", "2026", "40000", firstBranchId, getVehicleTypeId(cursor, VehicleType.SEDAN.value),)
         error = performSafeQuery(cursor, query, params)
 
         if error:
