@@ -1,5 +1,5 @@
 import flet as ft
-from database_init import connectToDatabase
+from database_init import connectToDatabase, performSafeQuery
 from definitions import VehicleInputField, VehicleType
 from typing import cast
 from datetime import datetime
@@ -78,11 +78,19 @@ def main(page: ft.Page):
 def getVehicleTypeId(vehicleType: str):
     if cachedVehicleTypeIds.get(vehicleType):
         return cachedVehicleTypeIds[vehicleType]
-
-    cursor.execute("SELECT VehicleTypeID FROM VehicleType WHERE TypeName = %s", (vehicleType,))
+    
+    query = "SELECT VehicleTypeID FROM VehicleType WHERE TypeName = %s"
+    params = (vehicleType,)
+    error = performSafeQuery(cursor, query, params)
+    
+    if error:
+        print(error)
+        return -1
+    
+    result = cursor.fetchone()
     # we know from the table structure that the ID will either be an int or
     # return None if it does not exist
-    result = cast(tuple[int] | None, cursor.fetchone())
+    result = cast(tuple[int] | None, result)
 
     if result is not None:
         cachedVehicleTypeIds[vehicleType] = result[0]
@@ -98,7 +106,7 @@ def getEstimatedCost(startTime: datetime, endTime: datetime, dailyRate: float):
 
 # called when the button to submit Vehicle table data is pressed, requires the dict of input fields that
 # fulfill the table data and the dropdown
-def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], vehicleTypeDropdown: ft.Dropdown):
+def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], vehicleTypeDropdown: ft.Dropdown, resultText: ft.Text):
     def isValidInput(inputName: VehicleInputField, inputValue: str):
         if inputValue.strip() == "":
             field = inputFields.get(inputName)
@@ -174,16 +182,21 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
             return
 
         # the super query
-        try:
-            cursor.execute("""
-                INSERT INTO Vehicle (LicensePlate, Name, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (licensePlate, name, make, model, color, dailyRate, year, mileage, branchId, vehicleTypeId))
+        query = """
+            INSERT INTO Vehicle (LicensePlate, Name, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (licensePlate, name, make, model, color, dailyRate, year, mileage, branchId, vehicleTypeId,)
+        error = performSafeQuery(cursor, query, params)
+            
+        if error:
+            resultText.color = ft.Colors.RED
+            resultText.value = str(error)
+            return
 
-            database.commit()
-        except:
-            # TODO: consider adding an output field that displays on the active window UI
-            print("An error occurred completing the query.")
+        resultText.color = ft.Colors.GREEN
+        resultText.value = "Successfully inserted vehicle"
+        database.commit()
 
 
 # helper function to build all of the UI for the vehicle input section
@@ -301,9 +314,16 @@ def prepareVehicleInputFields(screenWidth):
         VehicleInputField.BRANCH_ID: branchIdInput,
     }
 
+    resultText = ft.Text(
+        "", 
+        width=FIFTH_SCREEN_WIDTH, 
+        color="#000000", 
+        text_align=ft.TextAlign.CENTER,
+    )
+
     submitCarButton = ft.Button(
         content="Submit", 
-        on_click=lambda e: onVehicleInputSubmit(inputFields, carTypeInput), 
+        on_click=lambda e: onVehicleInputSubmit(inputFields, carTypeInput, resultText), 
         width=FIFTH_SCREEN_WIDTH
     )
 
@@ -326,7 +346,8 @@ def prepareVehicleInputFields(screenWidth):
                 controls=[
                     vehicleInputHeader,
                     vehicleInputFieldGrid,
-                    submitCarButton
+                    submitCarButton,
+                    resultText,
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             )
@@ -359,37 +380,63 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
     agreementElements = []
 
     
-    
-    cursor.execute("SELECT * FROM RentalAgreements WHERE CustomerID = %s", (customerId,))
-    results = cursor.fetchall()
-    for result in results:
-        cursor.execute("""
-            SELECT Vehicle.DailyRate
-            FROM RentalAgreement
-            JOIN Vehicle ON RentalAgreement.VehicleID = Vehicle.VehicleID
-            WHERE RentalAgreement.AgreementID = %s
-        """, cast(str, result[0]))
+    columnsToGet = "AgreementID, VehicleID, PickupBranchID, ReturnBranchID, ScheduledPickup, ScheduledReturn, ActualPickup, ActualReturn, EstimatedCost, ActualCost, Status"
+    query = f"SELECT {columnsToGet} FROM RentalAgreements WHERE CustomerID = %s"
+    params = (customerId,)
+    error = performSafeQuery(cursor, query, params)
 
-        dailyRate = cast(float, cursor.fetchone())
-        estimatedCost = None
-        actualCost = None
-        if dailyRate is not None:
-            estimatedCost = getEstimatedCost(cast(datetime, result[5]), cast(datetime, result[6]), dailyRate)
-            if result[7] and result[8]:
-                actualCost = getEstimatedCost(cast(datetime, result[7]), cast(datetime, result[8]), dailyRate)
+    if error is not None:
+        print(error)
+        return
+    
+    results = cursor.fetchall()
+    
+    for result in results:
+        agreementId = result[0]
+        vehicleId = result[1]
+        pickupBranchId = result[2]
+        returnBranchId = result[3]
+        scheduledPickup = result[4]
+        scheduledReturn = result[5]
+        actualPickup = result[6]
+        actualReturn = result[7]
+        estimatedCost = result[8]
+        actualCost = result[9]
+        status = result[10]
+
+        if estimatedCost is None:
+            query = """
+                SELECT Vehicle.DailyRate
+                FROM RentalAgreement
+                JOIN Vehicle ON RentalAgreement.VehicleID = Vehicle.VehicleID
+                WHERE RentalAgreement.AgreementID = %s
+            """
+            params = (result[0],)
+            error = performSafeQuery(cursor, query, params)
+
+            if error is not None:
+                dailyRate = cast(float, cursor.fetchone())
+                estimatedCost = None
+                actualCost = None
+                if dailyRate is not None:
+                    estimatedCost = getEstimatedCost(cast(datetime, result[5]), cast(datetime, result[6]), dailyRate)
+                    if actualPickup and actualReturn:
+                        actualCost = getEstimatedCost(cast(datetime, result[7]), cast(datetime, result[8]), dailyRate)
+            else:
+                print(error)
 
         textContent = f"""
-            Agreement ID: {result[0]}
-            Vehicle ID: {result[2]}
-            Pickup Branch ID: {result[3]}
-            Return Branch ID: {result[4]}
-            Scheduled Pickup: {result[5]}
-            Scheduled Return: {result[6]}
-            Actual Pickup: {result[7] or "Not picked up"}
-            Actual Return: {result[8] or "Not returned"}
-            Estimated Cost: {result[9] or estimatedCost}
-            Actual Cost: {result[10] or actualCost or "Not calculated"}
-            Status: {result[11]}
+            Agreement ID: {agreementId}
+            Vehicle ID: {vehicleId}
+            Pickup Branch ID: {pickupBranchId}
+            Return Branch ID: {returnBranchId}
+            Scheduled Pickup: {scheduledPickup}
+            Scheduled Return: {scheduledReturn}
+            Actual Pickup: {actualPickup or "Not picked up"}
+            Actual Return: {actualReturn or "Not returned"}
+            Estimated Cost: {estimatedCost}
+            Actual Cost: {actualCost or "Not calculated"}
+            Status: {status}
         """
         resultText = ft.Text(
             value=textContent, 
