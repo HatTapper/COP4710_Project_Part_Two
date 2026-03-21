@@ -25,6 +25,15 @@ class VehicleType(Enum):
     SUV = "SUV"
     VAN = "Van"
 
+class TableName(Enum):
+    VEHICLE_TYPE = "VehicleType"
+    RENTAL_BRANCH = "RentalBranch"
+    MAINTENANCE_STAFF = "MaintenanceStaff"
+    VEHICLE = "Vehicle"
+    CUSTOMER = "Customer"
+    RENTAL_AGREEMENT = "RentalAgreement"
+    MAINTENANCE_RECORD = "MaintenanceRecord"
+
 class RentalAgreementStatus(Enum):
     BOOKED = "Booked"
     ACTIVE = "Active"
