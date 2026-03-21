@@ -231,6 +231,174 @@ def verifyDatabaseIntegrity(cursor: MySQLCursor):
             break
         
         return isValid, reason
+    
+    if not tableExists(TableName.VEHICLE_TYPE.value):
+        print("Client does not have VehicleType table, creating...")
+        query = """
+            CREATE TABLE VehicleType(
+	            VehicleTypeID INT PRIMARY KEY AUTO_INCREMENT,
+	            TypeName VARCHAR(50) NOT NULL UNIQUE
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing VehicleType table : {error}"
+            return isValid, reason
+
+    if not tableExists(TableName.RENTAL_BRANCH.value):
+        print("Client does not have RentalBranch table, creating...")
+        query = """
+            CREATE TABLE RentalBranch(
+                BranchID 	INT PRIMARY  KEY AUTO_INCREMENT,
+                BranchName  VARCHAR(50)  NOT NULL,
+                Address 	VARCHAR(200) NOT NULL,
+                Phone 		VARCHAR(20)  NOT NULL
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing RentalBranch table : {error}"
+            return isValid, reason
+
+    if not tableExists(TableName.MAINTENANCE_STAFF.value):
+        print("Client does not have MaintenanceStaff table, creating...")
+        query = """
+            CREATE TABLE MaintenanceStaff(
+                StaffID        INT  PRIMARY KEY  AUTO_INCREMENT,
+                FirstName      VARCHAR(50)   NOT NULL,
+                LastName       VARCHAR(50)   NOT NULL,
+                OfficeNumber   VARCHAR(50)   NOT NULL,
+                Phone          VARCHAR(20)   NOT NULL,
+                Email          VARCHAR(50)   NOT NULL UNIQUE,
+                BranchID 	   INT  NOT NULL,
+                
+                FOREIGN KEY (BranchID) REFERENCES RentalBranch(BranchID)
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing MaintenanceStaff table : {error}"
+            return isValid, reason
+
+    if not tableExists(TableName.VEHICLE.value):
+        print("Client does not have Vehicle table, creating...")
+        query = """
+            CREATE TABLE Vehicle(
+                VehicleID 	   INT 			  PRIMARY KEY AUTO_INCREMENT,
+                LicensePlate   VARCHAR(20)    NOT NULL UNIQUE,
+                Make 		   VARCHAR(50)    NOT NULL,
+                Model 		   VARCHAR(50)    NOT NULL,
+                Year 		   SMALLINT 	  NOT NULL,
+                Color 		   VARCHAR(30)    NOT NULL,
+                DailyRate      DECIMAL(8, 2)  NOT NULL,
+                CurrentMileage INT UNSIGNED  NOT NULL,
+                IsAvailable    BOOLEAN 		  NOT NULL DEFAULT TRUE,
+                VehicleTypeID  INT 			  NOT NULL,
+                BranchID 	   INT 			  NOT NULL,
+
+                CHECK (Year > 1900),
+                
+                FOREIGN KEY(VehicleTypeID) REFERENCES VehicleType(VehicleTypeID),
+                FOREIGN KEY (BranchID) 	   REFERENCES RentalBranch(BranchID)
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing Vehicle table : {error}"
+            return isValid, reason
+
+    if not tableExists(TableName.CUSTOMER.value):
+        print("Client does not have Customer table, creating...")
+        query = """
+            CREATE TABLE Customer(
+                CustomerID 			INT 		 PRIMARY KEY AUTO_INCREMENT,
+                FirstName 			VARCHAR(50)  NOT NULL,
+                LastName 			VARCHAR(50)  NOT NULL,
+                Address 			VARCHAR(200) NOT NULL,
+                Phone 				VARCHAR(20)  NOT NULL,
+                Email 				VARCHAR(100) NOT NULL UNIQUE,
+                DriverLicenseNumber VARCHAR(50)  NOT NULL UNIQUE,
+                LicenseExpiryDate   DATE 		 NOT NULL
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing Customer table : {error}"
+            return isValid, reason
+        
+    if not tableExists(TableName.RENTAL_AGREEMENT.value):
+        print("Client does not have RentalAgreement table, creating...")
+        query = """
+            CREATE TABLE RentalAgreement(
+                AgreementID		INT PRIMARY KEY AUTO_INCREMENT,
+                CustomerID		INT NOT NULL,
+                VehicleID		INT NOT NULL,
+                PickupBranchID  INT NOT NULL,
+                ReturnBranchID  INT NOT NULL,
+                ScheduledPickup	DATETIME NOT NULL,
+                ScheduledReturn DATETIME NOT NULL,
+                ActualPickup	DATETIME,
+                ActualReturn	DATETIME,
+                EstimatedCost	DECIMAL(10, 2),
+                ActualCost		DECIMAL(10, 2),
+                Status		VARCHAR(20) NOT NULL,
+                
+                CHECK(Status IN('Booked', 'Active', 'Completed', 'Cancelled')),
+                CHECK(ScheduledReturn > ScheduledPickup),
+                
+                FOREIGN KEY(CustomerID) REFERENCES Customer(CustomerID),
+                FOREIGN KEY(VehicleID) REFERENCES Vehicle(VehicleID),
+                FOREIGN KEY(PickupBranchID) REFERENCES RentalBranch(BranchID),
+                FOREIGN KEY(ReturnBranchID) REFERENCES RentalBranch(BranchID)
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing RentalAgreement table : {error}"
+            return isValid, reason
+        
+    if not tableExists(TableName.MAINTENANCE_RECORD.value):
+        print("Client does not have MaintenanceRecord table, creating...")
+        query = """
+            CREATE TABLE MaintenanceRecord (
+                RecordID INT PRIMARY KEY AUTO_INCREMENT,
+                VehicleID INT NOT NULL,
+                CustomerID INT,
+                StaffID INT,
+                IssueType VARCHAR(20) NOT NULL,
+                IssueDescription TEXT NOT NULL,
+                IssueStatus VARCHAR(20) NOT NULL,
+                DateReported DATE NOT NULL,
+                TimeReported TIME NOT NULL,
+                DateTimeResolved DATETIME,
+                Notes TEXT,
+                
+                CHECK (IssueType IN ('Routine' , 'Urgent')),
+                CHECK (IssueStatus IN ('Reported' , 'In-Progress', 'Complete', 'Awaiting Parts')),
+                
+                FOREIGN KEY (VehicleID) REFERENCES Vehicle (VehicleID),
+                FOREIGN KEY (CustomerID) REFERENCES Customer (CustomerID),
+                FOREIGN KEY (StaffID) REFERENCES MaintenanceStaff (StaffID)
+            );
+        """
+        params = None
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            isValid = False
+            reason = f"Error initalizing MaintenanceRecord table : {error}"
+            return isValid, reason
 
     vehicleColumnNames = [
         "VehicleID", "LicensePlate",
