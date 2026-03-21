@@ -2,10 +2,6 @@ import flet as ft
 from database_init import connectToDatabase, performSafeQuery, initializeTestingData, getVehicleTypeId
 from definitions import *
 
-# note, this assumes the database is already constructed
-# at some point, we could write init code to prepare the tables
-# if they don't exist in the database
-
 # replace parameters with your data
 DB_HOST_NAME = "localhost"
 DB_USER_NAME = "root"
