@@ -1,5 +1,5 @@
 import flet as ft
-from database_init import connectToDatabase, performSafeQuery, initializeTestingData, getVehicleTypeId
+from database_connection import connectToDatabase, performSafeQuery, initializeTestingData, getVehicleTypeId
 from definitions import *
 
 # replace parameters with your data
