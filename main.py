@@ -365,6 +365,7 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
     
     results = cursor.fetchall()
 
+    #error message for invalid CustomerID
     if len(results) == 0:
         output.controls = [
             ft.Text(
