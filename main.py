@@ -155,7 +155,8 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
 
         vehicleTypeId = getVehicleTypeId(cursor, vehicleType)
         if vehicleTypeId < 0:
-            print("VehicleType input was a value that does not exist in the database! Query failed.")
+            resultText.color = ft.Colors.RED
+            resultText.value = "VehicleType input was a value that does not exist in the database! Query failed."
             return
         
         query = "SELECT 1 FROM Vehicle WHERE LicensePlate = %s"
