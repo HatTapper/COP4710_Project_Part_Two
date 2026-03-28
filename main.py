@@ -5,8 +5,8 @@ from definitions import *
 # replace parameters with your data
 DB_HOST_NAME = "localhost"
 DB_USER_NAME = "root"
-DB_USER_PASS = "Alfo121084!!"
-DB_DATABASE_NAME = "mydatabase"
+DB_USER_PASS = "6432"
+DB_DATABASE_NAME = "vrms"
 
 # if the database should be initialized with testing data
 # to assist in program functionality
@@ -127,7 +127,6 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
     
     shouldRunInsert = True
 
-    # TODO: needs to check each field for if the data is valid before running the SQL query
     for fieldName, inputField in inputFields.items():
         if isValidInput(fieldName, inputField.value):
             inputField.error = None
@@ -157,6 +156,18 @@ def onVehicleInputSubmit(inputFields: dict[VehicleInputField, ft.TextField], veh
         vehicleTypeId = getVehicleTypeId(cursor, vehicleType)
         if vehicleTypeId < 0:
             print("VehicleType input was a value that does not exist in the database! Query failed.")
+            return
+        
+        query = "SELECT 1 FROM Vehicle WHERE LicensePlate = %s"
+        params = (licensePlate,)
+        error = performSafeQuery(cursor, query, params)
+        if error is not None:
+            resultText.color = ft.Colors.RED
+            resultText.value = str(error)
+            return
+        elif cursor.fetchone() is not None:
+            resultText.color = ft.Colors.RED
+            resultText.value = "Car with license plate already exists."
             return
 
         # the super query
