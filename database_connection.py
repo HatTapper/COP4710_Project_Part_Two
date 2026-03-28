@@ -85,6 +85,7 @@ def initializeTestingData(database: MySQLConnection, cursor: MySQLCursor):
     JOHN_DOE_LICENSE_NUM = "123456789"
     JANE_DOE_LICENSE_NUM = "987654321"
     HONDA_CIVIC_PLATE = "901243"
+    TOYOTA_CAMRY_PLATE = "AAA246"
 
     if not customerExists(JOHN_DOE_LICENSE_NUM):
         query = """
@@ -170,7 +171,7 @@ def initializeTestingData(database: MySQLConnection, cursor: MySQLCursor):
         return
     secondBranchId = cast(int, secondBranchId[0])
 
-        
+    #adding Honda Civic Vehicle
     if not vehicleExists(HONDA_CIVIC_PLATE):
         query = """
             INSERT INTO Vehicle (LicensePlate, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
@@ -183,7 +184,22 @@ def initializeTestingData(database: MySQLConnection, cursor: MySQLCursor):
             print(f"Initialization with test values failed. Last recorded error: {error}")
             database.rollback()
             return
+        
+    #adding Toyota Camry Vehicle
+    if not vehicleExists(TOYOTA_CAMRY_PLATE):
+        query = """
+            INSERT INTO Vehicle (LicensePlate, Make, Model, Color, DailyRate, Year, CurrentMileage, BranchID, VehicleTypeID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (TOYOTA_CAMRY_PLATE, "Toyota", "Camry", "Black", "45.50", "2025", "9000", firstBranchId, getVehicleTypeId(cursor, VehicleType.SEDAN.value),)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
     
+    #adding agreement for John Doe (CustomerID 1)
     if not agreementExists(datetime(2026, 4, 16)):
         query = """
             INSERT INTO RentalAgreement (CustomerID, VehicleID, PickupBranchID, ReturnBranchID, ScheduledPickup, ScheduledReturn, Status)
@@ -197,7 +213,23 @@ def initializeTestingData(database: MySQLConnection, cursor: MySQLCursor):
             database.rollback()
             return
 
+
+    #Adding agreement for Jane Doe (CustomerID 2)
+    if not agreementExists(datetime(2026, 5, 8)):
+        query = """
+            INSERT INTO RentalAgreement (CustomerID, VehicleID, PickupBranchID, ReturnBranchID, ScheduledPickup, ScheduledReturn, Status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (getCustomerId(JANE_DOE_LICENSE_NUM), getVehicleId(TOYOTA_CAMRY_PLATE), firstBranchId, secondBranchId, datetime(2026, 4, 16), datetime(2026, 4, 20), RentalAgreementStatus.BOOKED.value,)
+        error = performSafeQuery(cursor, query, params)
+
+        if error:
+            print(f"Initialization with test values failed. Last recorded error: {error}")
+            database.rollback()
+            return
+
     print("Initialization with test values succeeded")
+    cursor.reset()
     database.commit()
 
 

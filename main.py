@@ -5,8 +5,8 @@ from definitions import *
 # replace parameters with your data
 DB_HOST_NAME = "localhost"
 DB_USER_NAME = "root"
-DB_USER_PASS = "6432"
-DB_DATABASE_NAME = "vrms"
+DB_USER_PASS = "Alfo121084!!"
+DB_DATABASE_NAME = "mydatabase"
 
 # if the database should be initialized with testing data
 # to assist in program functionality
@@ -350,8 +350,12 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
     agreementElements = []
 
     
-    columnsToGet = "AgreementID, VehicleID, PickupBranchID, ReturnBranchID, ScheduledPickup, ScheduledReturn, ActualPickup, ActualReturn, EstimatedCost, ActualCost, Status"
-    query = f"SELECT {columnsToGet} FROM RentalAgreement WHERE CustomerID = %s"
+    columnsToGet = """
+        AgreementID, RentalAgreement.VehicleID, PickupBranchID, ReturnBranchID, 
+        ScheduledPickup, ScheduledReturn, ActualPickup, ActualReturn, EstimatedCost, 
+        ActualCost, Status, Vehicle.LicensePlate, Vehicle.Make, Vehicle.Model, Vehicle.Color, Vehicle.Year
+    """
+    query = f"SELECT {columnsToGet} FROM RentalAgreement JOIN Vehicle ON RentalAgreement.VehicleID = Vehicle.VehicleID WHERE CustomerID = %s"
     params = (customerId,)
     error = performSafeQuery(cursor, query, params)
 
@@ -360,6 +364,18 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
         return
     
     results = cursor.fetchall()
+
+    if len(results) == 0:
+        output.controls = [
+            ft.Text(
+                "Invalid customer ID or no agreements found.",
+                text_align=ft.TextAlign.CENTER,
+                color=ft.Colors.RED,
+                height=150,
+            )
+        ]
+        output.update()
+        return
     
     for result in results:
         agreementId = result[0]
@@ -373,6 +389,11 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
         estimatedCost = result[8]
         actualCost = result[9]
         status = result[10]
+        licensePlate = result[11]
+        make = result[12]
+        model = result[13]
+        color = result[14]
+        year = result[15]
 
         if estimatedCost is None:
             query = """
@@ -416,7 +437,8 @@ def onCustomerAgreementSearch(customerInput: ft.TextField, output: ft.ListView):
             f"Actual Return: {actualReturn or 'Not returned'}\n"
             f"Estimated Cost: ${estimatedCost:.2f}\n"
             f"Actual Cost: {actualCost}\n"
-            f"Status: {status}"
+            f"Status: {status}\n"
+            f"Vehicle: {year} {make} {model} ({color}) | Plate: {licensePlate}\n"
         )
         resultText = ft.Text(
             value=textContent, 
